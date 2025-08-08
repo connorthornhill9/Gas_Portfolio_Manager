@@ -33,3 +33,4 @@ start_date,end_date,deal_type,volume_gj_per_day,price,supplier,delivery_point,da
 2025-08-02,2025-08-03,Index,100.0,4.0,Shell,DAWN,2025-08-02
 2025-08-02,2025-08-03,Index,100.0,4.0,Shell,DAWN,2025-08-03
 2025-08-04,2025-08-04,Index,600.0,5.0,Emera,DAWN,2025-08-04
+2025-08-05,2025-08-05,Index,800.0,5.0,TD,DAWN,2025-08-05
