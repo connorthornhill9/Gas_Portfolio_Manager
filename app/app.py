@@ -75,9 +75,190 @@ st.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# ========== CONFIG ==========
-st.set_page_config(page_title="Gas Portfolio Manager", layout="wide")
-#st.title("Natural Gas Portfolio Manager")
+# ================== APP HEADER ==================
+st.set_page_config(layout="wide", page_title="Natural Gas Portfolio Manager")
+
+with st.container():
+    st.markdown(
+        """
+        <div style="background-color: rgba(255,255,255,0.03); padding: 0.5rem 1rem; border-radius: 8px; margin-top: -10px;">
+        """,
+        unsafe_allow_html=True
+    )
+
+    with st.expander("ℹ️ **How to use this app**", expanded=False):
+        st.markdown("""
+        **What this app does**
+        - Helps Portfolio Managers track positions in their natural gas book.
+        - Supports procurement teams in making informed daily nomination decisions.
+        
+        **Key features**
+        - Track daily **Forecasted Consumption** and record **Executed Deals** (Fixed/Index).
+        - Visualize coverage vs. forecast and see per-day Buy/Sell guidance.
+        - Export forecast data for reporting or further analysis.
+
+        **Quick start**
+        1. **Enter/Upload Forecast** – add daily consumption values.
+        2. **Enter Deal** – add fixed/index volumes for a date range.
+        3. **Chart** – compare forecast vs. executed; filter by date range.
+        4. **Weekly Plan** – see per-day Buy/Sell suggestions.
+
+        **Notes**
+        - Re-uploading the same dates overwrites values.
+        - Deals expand to all days in Start–End range.
+        - The app is currently only able to write data when run locally.
+                    
+        Thank you for checking out the app! Feedback and suggestions are welcome.
+        """)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# === THEME: unified font + colors for dark mode ===
+
+# Palette (tweak if you want)
+BG        = "#0E1117"  # page bg
+PANEL     = "#111827"  # cards/expanders
+BORDER    = "#1F2937"
+TEXT      = "#E5E7EB"
+MUTED     = "#9CA3AF"
+ACCENT    = "#22D3EE"  # teal (primary)
+ACCENT_2  = "#F97316"  # orange (secondary)
+SUCCESS   = "#10B981"
+WARN      = "#F59E0B"
+DANGER    = "#EF4444"
+
+st.markdown(f"""
+<style>
+/* ---------- Font ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+html, body, [class*="st-"], [data-testid="stAppViewContainer"] {{
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif !important;
+  color: {TEXT};
+}}
+.stApp {{
+  background: {BG};
+}}
+/* tighten default margins a hair */
+.block-container {{
+  padding-top: 0.75rem;
+}}
+
+/* ---------- Expanders / Panels ---------- */
+div[data-testid="stExpander"] {{
+  background: {PANEL};
+  border: 1px solid {BORDER};
+  border-radius: 12px;
+}}
+div[data-testid="stExpander"] details {{
+  padding: .35rem .6rem 1rem .6rem;
+}}
+div[data-testid="stExpander"] summary p {{
+  font-weight: 600;
+  color: {TEXT};
+}}
+
+/* ---------- Inputs ---------- */
+.stTextInput>div>div>input,
+.stNumberInput input,
+.stDateInput input,
+.stSelectbox > div > div > div,
+.stFileUploader > div {{
+  background: {BG} !important;
+  color: {TEXT} !important;
+  border: 1px solid {BORDER} !important;
+  border-radius: 10px !important;
+}}
+/* radio/checkbox labels */
+.stRadio label, .stCheckbox label {{
+  color: {TEXT} !important;
+}}
+/* focus ring */
+.stTextInput>div>div>input:focus,
+.stNumberInput input:focus,
+.stDateInput input:focus {{
+  outline: 2px solid {ACCENT};
+  border-color: {ACCENT} !important;
+}}
+
+/* ---------- Buttons ---------- */
+.stButton>button {{
+  background: {ACCENT};
+  color: #061018;
+  border: none;
+  border-radius: 10px;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+}}
+.stButton>button:hover {{
+  background: #1BCFE3;
+}}
+/* Download button variant uses secondary accent */
+.stDownloadButton>button {{
+  background: {ACCENT_2};
+  color: #0B0F14;
+  border: none;
+  border-radius: 10px;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+}}
+.stDownloadButton>button:hover {{
+  filter: brightness(1.1);
+}}
+
+/* ---------- Metrics ---------- */
+[data-testid="stMetricValue"] {{
+  color: {TEXT};
+  font-weight: 700;
+}}
+[data-testid="stMetricDelta"] {{
+  font-weight: 600;
+}}
+/* color helpers if you show ups/downs */
+.metric-up    {{ color: {SUCCESS} !important; }}
+.metric-down  {{ color: {DANGER} !important; }}
+
+/* ---------- Tables / DataFrames ---------- */
+.stDataFrame, .stTable {{
+  border-radius: 10px;
+  overflow: hidden;
+}}
+.stDataFrame [data-testid="stTable"] thead th {{
+  background: {BG} !important;
+  color: {MUTED} !important;
+  border-bottom: 1px solid {BORDER} !important;
+}}
+.stDataFrame [data-testid="stTable"] tbody td {{
+  color: {TEXT} !important;
+  border-color: {BORDER} !important;
+}}
+/* dataframe toolbar */
+[data-testid="stElementToolbar"] button {{
+  background: {PANEL};
+  color: {TEXT};
+}}
+
+/* ---------- Headers inside your custom header ---------- */
+.header-container {{
+  background-color: {PANEL};
+  border-left: 4px solid {ACCENT};
+}}
+.header-title h1 {{
+  color: {TEXT};
+}}
+/* subtle muted helper text if you show tips */
+.muted {{
+  color: {MUTED};
+}}
+
+/* ---------- Plotly tweaks ---------- */
+/* Legend text & axes */
+.js-plotly-plot .legendtext, 
+.js-plotly-plot .xtick text, 
+.js-plotly-plot .ytick text {{
+  fill: {TEXT} !important;
+}}
+</style>
+""", unsafe_allow_html=True)
 
 # Constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -112,147 +293,259 @@ DEALS_COL_MAP = {
 }
 DEALS_REVERSE_COL_MAP = {v: k for k, v in DEALS_COL_MAP.items()}
 
-
 def load_forecast():
-    if os.path.exists(FORECAST_PATH):
-        df = pd.read_csv(FORECAST_PATH)
-        df["date"] = pd.to_datetime(df["date"], errors="coerce", format="mixed").dt.date
-        df = df.dropna(subset=["date"])
-        df = df.rename(columns=FORECAST_COL_MAP)
-        return df
-    else:
-        return pd.DataFrame(columns=list(FORECAST_COL_MAP.values()))
+    try:
+        if os.path.exists(FORECAST_PATH):
+            df = pd.read_csv(FORECAST_PATH)
+            df["date"] = pd.to_datetime(df["date"], errors="coerce", format="mixed").dt.date
+            df = df.dropna(subset=["date"])
+            df = df.rename(columns=FORECAST_COL_MAP)
+            return df
+    except Exception as e:
+        st.warning(f"⚠️ Could not load forecast file: {e}")
+    return pd.DataFrame(columns=list(FORECAST_COL_MAP.values()))
 
 
 def save_forecast(df):
-    df = df.rename(columns=FORECAST_REVERSE_COL_MAP)
-    df.to_csv(FORECAST_PATH, index=False)
+    try:
+        df = df.rename(columns=FORECAST_REVERSE_COL_MAP)
+        df.to_csv(FORECAST_PATH, index=False)
+    except Exception:
+        st.info("🔒 Forecast not saved (read-only environment).")
 
 
 def load_deals():
-    if os.path.exists(DEALS_PATH):
-        df = pd.read_csv(DEALS_PATH)
-        df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce").dt.date
-        df["end_date"] = pd.to_datetime(df["end_date"], errors="coerce").dt.date
-        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
-        df = df.rename(columns=DEALS_COL_MAP)
-        return df
-    else:
-        return pd.DataFrame(columns=list(DEALS_COL_MAP.values()))
+    try:
+        if os.path.exists(DEALS_PATH):
+            df = pd.read_csv(DEALS_PATH)
+            df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce").dt.date
+            df["end_date"] = pd.to_datetime(df["end_date"], errors="coerce").dt.date
+            df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+            df = df.rename(columns=DEALS_COL_MAP)
+            return df
+    except Exception as e:
+        st.warning(f"⚠️ Could not load deals file: {e}")
+    return pd.DataFrame(columns=list(DEALS_COL_MAP.values()))
 
 
 def save_deals(df):
-    df = df.rename(columns=DEALS_REVERSE_COL_MAP)
-    df.to_csv(DEALS_PATH, index=False)
+    try:
+        df = df.rename(columns=DEALS_REVERSE_COL_MAP)
+        df.to_csv(DEALS_PATH, index=False)
+    except Exception:
+        st.info("🔒 Deals not saved (read-only environment).")
 
-# ========== SECTION 1.1: Forecast vs. Executed Visualization (Always Visible) ==========
+def right_aligned_help(label: str, content_md: str):
+    """Show a right-aligned 'Help' popover with markdown content."""
+    c1, c2 = st.columns([1, 0.14])
+    with c2:
+        with st.popover(label, use_container_width=True):
+            st.markdown(content_md)
 
-st.markdown("## Forecast vs. Executed Deals")
+# ========== SECTION 1: Visualization ==========
 
-# Date range selector
+# Title + inline help
+title_col, help_col = st.columns([1, 0.08])
+with title_col:
+    st.markdown("## Forecast vs. Executed Deals")
+with help_col:
+    # Small inline tip for this section
+    try:
+        # Streamlit >= 1.33 has st.popover
+        with st.popover("ℹ️", use_container_width=True):
+            st.markdown("""
+**What you’re seeing**
+- **Bars**: daily executed volume (**Fixed + Index**, stacked)
+- **Line**: daily **Forecasted Consumption**
+- Soft halo color hints **Long / Short / Balanced** per day
+
+**How to use**
+- Pick a **date range** to focus the analysis (defaults to the current gas week).
+- Tiles show period totals and % difference.
+""")
+    except Exception:
+        # Fallback if popover isn't available
+        with st.expander("ℹ️ About this chart", expanded=False):
+            st.markdown("""
+**Bars**: Fixed + Index (stacked) • **Line**: Forecast  
+Soft halos: Long / Short / Balanced by day  
+Use the date range to focus the view; tiles sum the selected period.
+""")
+
+# ---- Load data ----
 fc = load_forecast()
-fc["Date"] = pd.to_datetime(fc["Date"]).dt.date
-min_date = fc["Date"].min()
-max_date = fc["Date"].max()
-
-default_start = min_date
-default_end = max_date
-
-start_date, end_date = st.date_input("Select Date Range", value=(default_start, default_end), min_value=min_date, max_value=max_date)
-fc = fc[(fc["Date"] >= start_date) & (fc["Date"] <= end_date)]
-fc = fc.set_index("Date").sort_index()
-
-# Load and filter deals
 dl = load_deals()
-if not dl.empty:
-    dl["Date"] = pd.to_datetime(dl["Date"]).dt.date
-    dl = dl[(dl["Date"] >= start_date) & (dl["Date"] <= end_date)]
 
-    pivot = dl.pivot_table(index="Date", columns="Deal Type", values="Volume (GJ/day)", aggfunc="sum").fillna(0)
-    pivot = pivot.sort_index()
-    pivot["Total"] = pivot.sum(axis=1)
+if fc.empty:
+    st.info("No forecast data yet.")
+else:
+    fc["Date"] = pd.to_datetime(fc["Date"]).dt.date
+    fc = fc.set_index("Date").sort_index()
+
+    if not dl.empty:
+        dl["Date"] = pd.to_datetime(dl["Date"]).dt.date
+
+    # ---- Default date window: Aug 2 → Aug 8 (7 days) ----
+    default_start = date(2025, 8, 2)
+    default_end   = default_start + timedelta(days=6)
+
+    # Constrain the picker to available forecast range, but default to the requested week
+    min_date = fc.index.min() if not fc.empty else default_start
+    max_date = fc.index.max() if not fc.empty else default_end
+    start_bound = min(min_date, default_start)
+    end_bound = max(max_date, default_end)
+
+    start_date, end_date = st.date_input(
+        "Select Date Range",
+        value=(default_start, default_end),
+        min_value=start_bound,
+        max_value=end_bound,
+        format="YYYY/MM/DD"
+    )
+
+    # ---- Build daily pivot for deals and align with forecast ----
+    if not dl.empty:
+        pivot = dl.pivot_table(
+            index="Date",
+            columns="Deal Type",
+            values="Volume (GJ/day)",
+            aggfunc="sum"
+        ).fillna(0).sort_index()
+        pivot["Total"] = pivot.sum(axis=1)
+    else:
+        # No deals yet; still show forecast line
+        pivot = pd.DataFrame(index=fc.index.copy())
+        pivot["Fixed"] = 0
+        pivot["Index"] = 0
+        pivot["Total"] = 0
 
     combined_index = fc.index.union(pivot.index)
-    fc = fc.reindex(combined_index).fillna(0)
-    pivot = pivot.reindex(combined_index).fillna(0)
+    fc_aligned = fc.reindex(combined_index).fillna(0)
+    pv = pivot.reindex(combined_index).fillna(0)
 
-    pivot["Forecast"] = fc["Forecast Consumption"]
-    pivot["Long/Short"] = pivot["Total"] - pivot["Forecast"]
+    pv["Forecast"] = fc_aligned["Forecast Consumption"]
+    pv["Long/Short"] = pv["Total"] - pv["Forecast"]
 
-    def status_label(val):
-        if val < -1e-2:
-            return "Short"
-        elif val > 1e-2:
-            return "Long"
-        else:
-            return "Balanced"
+    # Filter to selected window
+    mask = (pv.index >= start_date) & (pv.index <= end_date)
+    pv = pv.loc[mask]
 
-    position_status = pivot["Long/Short"].apply(status_label)
-    forecast_vals = pivot["Forecast"].to_numpy()
-    fixed_vals = pivot.get("Fixed", pd.Series(index=pivot.index, data=0)).to_numpy()
-    index_vals = pivot.get("Index", pd.Series(index=pivot.index, data=0)).to_numpy()
-    customdata = np.stack([position_status, forecast_vals, fixed_vals, index_vals], axis=-1)
+    # ---- Summary metrics ----
+    total_forecast = float(pv["Forecast"].sum())
+    total_executed = float(pv["Total"].sum())
+    pct_diff = (total_executed - total_forecast) / total_forecast * 100 if total_forecast else 0.0
 
-    # Summary metrics
-    st.markdown("### Summary")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Forecasted", f"{pivot['Forecast'].sum():,.0f} GJ")
-    col2.metric("Total Executed", f"{pivot['Total'].sum():,.0f} GJ")
-    col3.metric("% Difference", f"{(pivot['Total'].sum() - pivot['Forecast'].sum()) / pivot['Forecast'].sum() * 100:.1f}%")
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("Total Forecasted", f"{total_forecast:,.0f} GJ")
+    col_b.metric("Total Executed", f"{total_executed:,.0f} GJ")
+    col_c.metric("% Difference", f"{pct_diff:,.1f}%")
 
+    # ---- Dark mode palette ----
+    COLOR_FIXED   = "#3B82F6"   # blue-500 (muted)
+    COLOR_INDEX   = "#F97316"   # orange-400 (muted)
+    COLOR_LINE    = "#FFFFFF"   # forecast line
+    COLOR_GRID    = "rgba(255,255,255,0.08)"
+    COLOR_BG      = "rgba(0,0,0,0)"
+
+    # Status glow colors (softer)
+    GLOW_LONG     = "rgba(77,182,172,0.18)"   # soft teal
+    GLOW_SHORT    = "rgba(229,115,115,0.20)"  # soft coral
+    GLOW_BAL      = "rgba(144,164,174,0.15)"  # blue-grey
+
+    # ---- Precompute arrays ----
+    idx_dates     = pv.index
+    fixed_vals    = pv.get("Fixed", pd.Series(index=pv.index, data=0)).to_numpy()
+    index_vals    = pv.get("Index", pd.Series(index=pv.index, data=0)).to_numpy()
+    forecast_vals = pv["Forecast"].to_numpy()
+
+    def status_label(v):
+        if v < -1e-2: return "Short"
+        if v >  1e-2: return "Long"
+        return "Balanced"
+
+    status = pv["Long/Short"].apply(status_label).tolist()
+    customdata = np.stack([status, forecast_vals, fixed_vals, index_vals], axis=-1)
+
+    # ---- Plotly figure ----
     fig = go.Figure()
-    fig.add_trace(go.Bar(name="Fixed", x=pivot.index, y=fixed_vals, marker_color="#1f77b4"))
-    fig.add_trace(go.Bar(name="Index", x=pivot.index, y=index_vals, marker_color="#ff7f0e"))
 
-    for dt, y, pos in zip(pivot.index, forecast_vals, position_status):
-        color = (
-            "rgba(0,255,0,0.2)" if pos == "Short"
-            else "rgba(255,0,0,0.2)" if pos == "Long"
-            else "rgba(255,255,0,0.2)"
-        )
+    # Bars (stacked): add a subtle border to increase separation on dark bg
+    fig.add_trace(go.Bar(
+        name="Fixed", x=idx_dates, y=fixed_vals,
+        marker=dict(color=COLOR_FIXED, line=dict(width=0.5, color="rgba(255,255,255,0.2)"))
+    ))
+    fig.add_trace(go.Bar(
+        name="Index", x=idx_dates, y=index_vals,
+        marker=dict(color=COLOR_INDEX, line=dict(width=0.5, color="rgba(255,255,255,0.2)"))
+    ))
+
+    # Soft “glow” markers behind the forecast line to hint long/short/balanced
+    for d, y, s in zip(idx_dates, forecast_vals, status):
+        glow = GLOW_LONG if s == "Long" else GLOW_SHORT if s == "Short" else GLOW_BAL
         fig.add_trace(go.Scatter(
-            x=[dt],
-            y=[y],
-            mode="markers",
-            marker=dict(size=20, color=color, symbol="circle"),
-            showlegend=False,
-            hoverinfo='skip'
+            x=[d], y=[y], mode="markers",
+            marker=dict(size=18, color=glow, symbol="circle"),
+            hoverinfo="skip", showlegend=False
         ))
 
+    # Forecast line
     fig.add_trace(go.Scatter(
         name="Forecasted Consumption",
-        x=pivot.index,
-        y=forecast_vals,
+        x=idx_dates, y=forecast_vals,
         mode="lines+markers",
-        line=dict(color="white", width=2),
-        marker=dict(size=6),
+        line=dict(color=COLOR_LINE, width=2),
+        marker=dict(size=6, line=dict(width=1, color="rgba(255,255,255,0.6)")),
         customdata=customdata,
         hovertemplate=(
-            "<b>Position:</b> %{customdata[0]}<br>"
-            "Forecasted Consumption: %{customdata[1]:.0f} GJ<br>"
-            "Fixed Deal: %{customdata[2]:.0f} GJ<br>"
-            "Index Deal: %{customdata[3]:.0f} GJ<br>"
+            "<b>%{x}</b><br>"
+            "Position: %{customdata[0]}<br>"
+            "Forecast: %{customdata[1]:,.0f} GJ<br>"
+            "Fixed: %{customdata[2]:,.0f} GJ<br>"
+            "Index: %{customdata[3]:,.0f} GJ<br>"
             "<extra></extra>"
         )
     ))
 
+    # Layout: dark-mode friendly grid, spacing, legend
     fig.update_layout(
         barmode="stack",
         xaxis_title="Date",
         yaxis_title="GJ",
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(bgcolor="rgba(0,0,0,0)")
+        plot_bgcolor=COLOR_BG,
+        paper_bgcolor=COLOR_BG,
+        legend=dict(bgcolor="rgba(0,0,0,0)", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=10, r=10, t=10, b=30),
     )
+    fig.update_xaxes(showgrid=True, gridcolor=COLOR_GRID, zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor=COLOR_GRID, zeroline=False)
 
     st.plotly_chart(fig, use_container_width=True)
 
-else:
-    st.info("No deals to visualize yet.")
 
-# ========== SECTION 1: Forecast Entry ==========
+# ========== SECTION 2: Forecast Entry ==========
 
 with st.expander("1. Enter or Upload Daily Forecast"):
+    # ---- Inline Help ----
+    right_aligned_help(
+        "ℹ️ Help",
+        """
+**Purpose**
+- Add or upload daily **Forecast Consumption (GJ)**.
+
+**Manual Entry**
+- Pick a *Forecast Date* and enter GJ.
+- Adding the same date **replaces** the previous forecast for that date.
+
+**Upload**
+- CSV must contain columns: **`Date`**, **`Forecast Consumption`**.
+- Dates are parsed leniently; invalid rows are skipped.
+- If a date already exists, the uploaded row **overwrites** it.
+
+**Tip**
+- You can re-upload a file as you iterate—data for the same dates will be updated, not duplicated.
+        """
+    )
+
     forecast_tab, upload_tab = st.tabs(["Manual Entry", "Upload File"])
 
     # --- Manual Entry Tab ---
@@ -307,9 +600,22 @@ with st.expander("1. Enter or Upload Daily Forecast"):
             except Exception as e:
                 st.error(f"❌ Error processing file: {e}")
 
-# ========== SECTION 2: View or Export Forecast Data ==========
+# ========== SECTION 3: View or Export Forecast Data ==========
 
 with st.expander("2. View or Export Forecast Data"):
+    # ---- Inline Help ----
+    right_aligned_help(
+        "ℹ️ Help",
+        """
+**Purpose**
+- Review your forecast table and **download** a CSV snapshot.
+
+**Tips**
+- Toggle between **GJ** and **m³** using the unit selector.
+- The table is sorted by `Date`. Use the download button to export exactly what you see.
+        """
+    )
+
     forecast_df = load_forecast()
 
     if not forecast_df.empty:
@@ -328,9 +634,29 @@ with st.expander("2. View or Export Forecast Data"):
     else:
         st.info("No forecast data available.")
 
-# ========== SECTION 3: Enter Executed Deal ==========
+# ========== SECTION 4: Enter Executed Deal ==========
 
 with st.expander("3. Enter Executed Deal"):
+    # ---- Inline Help ----
+    right_aligned_help(
+        "ℹ️ Help",
+        """
+**Purpose**
+- Record **Fixed** or **Index** deals for a date range.
+
+**How it works**
+- The **Start/End Date** range expands to **every day** in that range.
+- Daily **Volume (GJ/day)** and **Price ($/GJ)** apply uniformly to all days.
+- You may enter **negative volumes** to represent sales/offsets.
+
+**Validation**
+- End Date must be **on/after** Start Date (you’ll see an error otherwise).
+
+**Where to edit/delete**
+- Use **Manage Deals** to update or remove a full deal later.
+        """
+    )
+
     deals_df = load_deals()
 
     with st.form("deal_entry_form"):
@@ -340,7 +666,7 @@ with st.expander("3. Enter Executed Deal"):
         deal_volume = st.number_input("Volume (GJ/day)", min_value=0.0)
         deal_price = st.number_input("Price ($/GJ)", min_value=0.0)
         deal_supplier = st.selectbox("Supplier", ["Shell", "TD", "Emera", "DirectEnergy", "Other"])
-        delivery_point = st.selectbox("Delivery Point", ["AECO", "DAWN", "Parkway"])
+        delivery_point = st.selectbox("Delivery Point", ["DAWN", "Parkway", "AECO", "Other"])
         submit_deal = st.form_submit_button("Add Deal")
 
     if submit_deal:
@@ -390,8 +716,24 @@ with st.expander("3. Enter Executed Deal"):
 
             st.dataframe(deal_entry)
 
-# ========== SECTION 4: Manage Deals ==========
+# ========== SECTION 5: Manage Deals ==========
 with st.expander("4. Manage Deals"):
+    # Inline help (right-aligned)
+    right_aligned_help(
+        "ℹ️ Help",
+        """
+**Purpose**
+- Edit an entire deal group at once (same **Start/End** and **Supplier**).
+
+**How it works**
+- Select a deal group, then update **Volume (GJ/day)** and/or **Price ($/GJ)**.
+- Changes apply to **every date** in that deal’s range.
+
+**Notes**
+- To change Start/End or Supplier, delete and re-add the deal.
+        """
+    )
+
     deals_df = load_deals()
 
     if not deals_df.empty:
@@ -422,7 +764,7 @@ with st.expander("4. Manage Deals"):
                 st.markdown("### Edit Deal")
                 new_volume = st.number_input("Volume (GJ/day)", value=selected_deals["Volume (GJ/day)"].iloc[0])
                 new_price = st.number_input("Price ($/GJ)", value=selected_deals["Price ($/GJ)"].iloc[0])
-                submit_edit = st.form_submit_button("Update Entire Deal")
+                submit_edit = st.form_submit_button("Update Deal")
 
             if submit_edit:
                 deals_df.loc[deal_mask, "Volume (GJ/day)"] = new_volume
@@ -435,6 +777,22 @@ with st.expander("4. Manage Deals"):
 
 # ========== SECTION 6: Weekly Action Plan ==========
 with st.expander("6. Weekly Action Plan"):
+    # Inline help (right-aligned)
+    right_aligned_help(
+        "ℹ️ Help",
+        """
+**Purpose**
+- Review weekly coverage vs. forecast and get daily **Buy/Sell** guidance.
+
+**Gas week**
+- Runs **Saturday → Friday**.
+
+**How to use**
+- Pick the **Week Start** (Saturday).
+- Table shows: Forecast, Total Deals, Action = (Forecast − Deals), and Suggestion.
+        """
+    )
+
     st.subheader("Weekly Forecast Coverage and Action Plan")
 
     forecast_df = load_forecast()
@@ -487,4 +845,11 @@ with st.expander("6. Weekly Action Plan"):
     else:
         st.info("Upload forecast data first to generate an action plan.")
 
+# Footer
+st.markdown(
+    f"<hr><p style='text-align:center; color:gray; font-size:12px;'>"
+    f"Created by Connor Thornhill | <a href='{github_url}' target='_blank'>GitHub</a>"
+    "</p>",
+    unsafe_allow_html=True
+)
 # ========== END OF APP ==========
