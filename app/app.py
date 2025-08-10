@@ -407,8 +407,8 @@ Use the date range to focus the view; tiles sum the selected period.
 """)
 
 # ---- Load data ----
-fc = load_forecast()
-dl = load_deals()
+fc = get_forecast()
+dl = get_deals()
 
 if fc.empty:
     st.info("No forecast data yet.")
@@ -555,7 +555,6 @@ else:
 
     st.plotly_chart(fig, use_container_width=True)
 
-
 # ========== SECTION 2: Forecast Entry ==========
 
 with st.expander("1. Enter or Upload Daily Forecast"):
@@ -582,59 +581,62 @@ with st.expander("1. Enter or Upload Daily Forecast"):
 
     forecast_tab, upload_tab = st.tabs(["Manual Entry", "Upload File"])
 
-# --- Manual Entry Tab ---
-with forecast_tab:
-    with st.form("forecast_form"):
-        forecast_date = st.date_input("Forecast Date")
-        forecast_consumption = st.number_input("Forecast Consumption (GJ)", min_value=0.0)
-        submit_forecast = st.form_submit_button("Add Forecast")
+    # --- Manual Entry Tab ---
+    with forecast_tab:
+        with st.form("forecast_form"):
+            forecast_date = st.date_input("Forecast Date")
+            forecast_consumption = st.number_input("Forecast Consumption (GJ)", min_value=0.0)
+            submit_forecast = st.form_submit_button("Add Forecast")
 
-    if submit_forecast:
-        forecast_df = get_forecast()  # read from session state
+        if submit_forecast:
+            forecast_df = get_forecast()  # read from session state
 
-        new_row = pd.DataFrame({
-            "Date": [forecast_date],
-            "Year": [forecast_date.year],
-            "Month": [forecast_date.month],
-            "Day": [forecast_date.day],
-            "Forecast Consumption": [forecast_consumption]
-        })
+            new_row = pd.DataFrame({
+                "Date": [forecast_date],
+                "Year": [forecast_date.year],
+                "Month": [forecast_date.month],
+                "Day": [forecast_date.day],
+                "Forecast Consumption": [forecast_consumption]
+            })
 
-        forecast_df = forecast_df[forecast_df["Date"] != forecast_date]
-        forecast_df = pd.concat([forecast_df, new_row], ignore_index=True)
-        set_forecast(forecast_df)  # <-- updates session + optionally saves
-        st.success("✅ Forecast added.")
-        st.dataframe(new_row)
+            # overwrite same-date rows, then append
+            forecast_df = forecast_df[forecast_df["Date"] != forecast_date]
+            forecast_df = pd.concat([forecast_df, new_row], ignore_index=True)
 
-# --- Upload Tab ---
-with upload_tab:
-    uploaded_file = st.file_uploader(
-        "Upload Forecast CSV (columns: Date, Forecast Consumption)", type="csv"
-    )
+            set_forecast(forecast_df)  # updates session (+ saves locally if ALLOW_WRITE=1)
+            st.success("✅ Forecast added.")
+            st.dataframe(new_row)
+            # st.rerun()  # optional: uncomment if you want an immediate refresh
 
-    if uploaded_file:
-        try:
-            uploaded_df = pd.read_csv(uploaded_file)
+    # --- Upload Tab ---
+    with upload_tab:
+        uploaded_file = st.file_uploader(
+            "Upload Forecast CSV (columns: Date, Forecast Consumption)", type="csv"
+        )
 
-            if not {"Date", "Forecast Consumption"}.issubset(uploaded_df.columns):
-                st.error("❌ Uploaded file must contain 'Date' and 'Forecast Consumption' columns.")
-            else:
-                uploaded_df["Date"] = pd.to_datetime(uploaded_df["Date"], errors="coerce").dt.date
-                uploaded_df = uploaded_df.dropna(subset=["Date"])
-                uploaded_df["Year"] = pd.to_datetime(uploaded_df["Date"]).dt.year
-                uploaded_df["Month"] = pd.to_datetime(uploaded_df["Date"]).dt.month
-                uploaded_df["Day"] = pd.to_datetime(uploaded_df["Date"]).dt.day
+        if uploaded_file:
+            try:
+                uploaded_df = pd.read_csv(uploaded_file)
 
-                existing_df = get_forecast()
-                merged = pd.concat([existing_df, uploaded_df], ignore_index=True)
-                merged = merged.drop_duplicates(subset=["Date"], keep="last")
+                if not {"Date", "Forecast Consumption"}.issubset(uploaded_df.columns):
+                    st.error("❌ Uploaded file must contain 'Date' and 'Forecast Consumption' columns.")
+                else:
+                    uploaded_df["Date"] = pd.to_datetime(uploaded_df["Date"], errors="coerce").dt.date
+                    uploaded_df = uploaded_df.dropna(subset=["Date"])
+                    uploaded_df["Year"] = pd.to_datetime(uploaded_df["Date"]).dt.year
+                    uploaded_df["Month"] = pd.to_datetime(uploaded_df["Date"]).dt.month
+                    uploaded_df["Day"] = pd.to_datetime(uploaded_df["Date"]).dt.day
 
-                set_forecast(merged)  # <-- updates session + optionally saves
-                st.success("✅ Forecast file uploaded and merged.")
-                st.dataframe(uploaded_df)
+                    existing_df = get_forecast()  # session copy
+                    merged = pd.concat([existing_df, uploaded_df], ignore_index=True)
+                    merged = merged.drop_duplicates(subset=["Date"], keep="last")
 
-        except Exception as e:
-            st.error(f"❌ Error processing file: {e}")
+                    set_forecast(merged)  # updates session (+ saves locally if ALLOW_WRITE=1)
+                    st.success("✅ Forecast file uploaded and merged.")
+                    st.dataframe(uploaded_df)
+                    # st.rerun()  # optional
+            except Exception as e:
+                st.error(f"❌ Error processing file: {e}")
 
 # ========== SECTION 3: View or Export Forecast Data ==========
 with st.expander("2. View or Export Forecast Data"):
