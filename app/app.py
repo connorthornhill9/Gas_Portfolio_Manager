@@ -10,8 +10,15 @@ from datetime import date, timedelta
 import os
 import base64
 
-# Load flame logo
-logo_path = "C:/Users/thorn/OneDrive/Pictures/Gasflame2.png"
+# Constants
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+FORECAST_PATH = os.path.join(DATA_DIR, "forecast.csv")
+DEALS_PATH = os.path.join(DATA_DIR, "deals.csv")
+ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+GJ_TO_M3 = 26.853  # hardcoded conversion factor
+os.makedirs(DATA_DIR, exist_ok=True)
+logo_path = os.path.join(ASSETS_DIR, "Gasflame2.png")
 
 # Encode logo as base64
 logo_base64 = base64.b64encode(open(logo_path, "rb").read()).decode()
@@ -259,14 +266,6 @@ div[data-testid="stExpander"] summary p {{
 }}
 </style>
 """, unsafe_allow_html=True)
-
-# Constants
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-FORECAST_PATH = os.path.join(DATA_DIR, "forecast.csv")
-DEALS_PATH = os.path.join(DATA_DIR, "deals.csv")
-GJ_TO_M3 = 26.853  # hardcoded conversion factor
-os.makedirs(DATA_DIR, exist_ok=True)
 
 # ========== LOAD & SAVE FUNCTIONS ==========
 
