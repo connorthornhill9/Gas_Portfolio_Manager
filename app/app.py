@@ -10,7 +10,86 @@ from datetime import date, timedelta
 import os
 import base64
 
-# Constants
+st.set_page_config(layout="wide", page_title="Natural Gas Portfolio Manager")
+
+# ========== Helpers ==========
+
+# Mapping for Forecast columns
+FORECAST_COL_MAP = {
+    "date": "Date",
+    "year": "Year",
+    "month": "Month",
+    "day": "Day",
+    "forecast_consumption": "Forecast Consumption"
+}
+FORECAST_REVERSE_COL_MAP = {v: k for k, v in FORECAST_COL_MAP.items()}
+
+# Mapping for Deals columns
+DEALS_COL_MAP = {
+    "start_date": "Start Date",
+    "end_date": "End Date",
+    "deal_type": "Deal Type",
+    "volume_gj_per_day": "Volume (GJ/day)",
+    "price": "Price ($/GJ)",
+    "supplier": "Supplier",
+    "delivery_point": "Delivery Point",
+    "date": "Date"
+}
+DEALS_REVERSE_COL_MAP = {v: k for k, v in DEALS_COL_MAP.items()}
+
+def load_forecast():
+    try:
+        if os.path.exists(FORECAST_PATH):
+            df = pd.read_csv(FORECAST_PATH)
+            df["date"] = pd.to_datetime(df["date"], errors="coerce", format="mixed").dt.date
+            df = df.dropna(subset=["date"])
+            df = df.rename(columns=FORECAST_COL_MAP)
+            return df
+    except Exception as e:
+        st.warning(f"⚠️ Could not load forecast file: {e}")
+    return pd.DataFrame(columns=list(FORECAST_COL_MAP.values()))
+
+
+def save_forecast(df):
+    try:
+        df = df.rename(columns=FORECAST_REVERSE_COL_MAP)
+        df.to_csv(FORECAST_PATH, index=False)
+    except Exception:
+        st.info("🔒 Forecast not saved (read-only environment).")
+
+
+def load_deals():
+    try:
+        if os.path.exists(DEALS_PATH):
+            df = pd.read_csv(DEALS_PATH)
+            df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce").dt.date
+            df["end_date"] = pd.to_datetime(df["end_date"], errors="coerce").dt.date
+            df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+            df = df.rename(columns=DEALS_COL_MAP)
+            return df
+    except Exception as e:
+        st.warning(f"⚠️ Could not load deals file: {e}")
+    return pd.DataFrame(columns=list(DEALS_COL_MAP.values()))
+
+
+def save_deals(df):
+    try:
+        df = df.rename(columns=DEALS_REVERSE_COL_MAP)
+        df.to_csv(DEALS_PATH, index=False)
+    except Exception:
+        st.info("🔒 Deals not saved (read-only environment).")
+
+def right_aligned_help(label: str, content_md: str):
+    c1, c2 = st.columns([1, 0.14])
+    with c2:
+        try:
+            with st.popover(label, use_container_width=True):
+                st.markdown(content_md)
+        except Exception:
+            with st.expander(label, expanded=False):
+                st.markdown(content_md)
+
+# ========== Constants ==========
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 FORECAST_PATH = os.path.join(DATA_DIR, "forecast.csv")
@@ -21,7 +100,39 @@ os.makedirs(DATA_DIR, exist_ok=True)
 logo_path = os.path.join(ASSETS_DIR, "Gasflame2.png")
 
 # Encode logo as base64
-logo_base64 = base64.b64encode(open(logo_path, "rb").read()).decode()
+try:
+    with open(logo_path, "rb") as f:
+        logo_base64 = base64.b64encode(f.read()).decode()
+except Exception as e:
+    st.warning(f"Logo not found at {logo_path}: {e}")
+    logo_base64 = ""
+
+# Demo/persistent toggle (set ALLOW_WRITE=1 in your Streamlit secrets or env if you want to persist)
+ALLOW_WRITE = os.environ.get("ALLOW_WRITE", "0") == "1"
+
+# Initialize in-memory working copies from CSVs (first run only)
+if "forecast_df" not in st.session_state:
+    st.session_state["forecast_df"] = load_forecast()
+
+if "deals_df" not in st.session_state:
+    st.session_state["deals_df"] = load_deals()
+
+def get_forecast():
+    # Always read from in-memory working copy
+    return st.session_state["forecast_df"].copy()
+
+def get_deals():
+    return st.session_state["deals_df"].copy()
+
+def set_forecast(df):
+    st.session_state["forecast_df"] = df.copy()
+    if ALLOW_WRITE:
+        save_forecast(df)
+
+def set_deals(df):
+    st.session_state["deals_df"] = df.copy()
+    if ALLOW_WRITE:
+        save_deals(df)
 
 # GitHub and LinkedIn icon URLs (white icons)
 github_url = "https://github.com/connorthornhill9"
@@ -83,8 +194,6 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ================== APP HEADER ==================
-st.set_page_config(layout="wide", page_title="Natural Gas Portfolio Manager")
-
 with st.container():
     st.markdown(
         """
@@ -266,80 +375,6 @@ div[data-testid="stExpander"] summary p {{
 }}
 </style>
 """, unsafe_allow_html=True)
-
-# ========== LOAD & SAVE FUNCTIONS ==========
-
-# Mapping for Forecast columns
-FORECAST_COL_MAP = {
-    "date": "Date",
-    "year": "Year",
-    "month": "Month",
-    "day": "Day",
-    "forecast_consumption": "Forecast Consumption"
-}
-FORECAST_REVERSE_COL_MAP = {v: k for k, v in FORECAST_COL_MAP.items()}
-
-# Mapping for Deals columns
-DEALS_COL_MAP = {
-    "start_date": "Start Date",
-    "end_date": "End Date",
-    "deal_type": "Deal Type",
-    "volume_gj_per_day": "Volume (GJ/day)",
-    "price": "Price ($/GJ)",
-    "supplier": "Supplier",
-    "delivery_point": "Delivery Point",
-    "date": "Date"
-}
-DEALS_REVERSE_COL_MAP = {v: k for k, v in DEALS_COL_MAP.items()}
-
-def load_forecast():
-    try:
-        if os.path.exists(FORECAST_PATH):
-            df = pd.read_csv(FORECAST_PATH)
-            df["date"] = pd.to_datetime(df["date"], errors="coerce", format="mixed").dt.date
-            df = df.dropna(subset=["date"])
-            df = df.rename(columns=FORECAST_COL_MAP)
-            return df
-    except Exception as e:
-        st.warning(f"⚠️ Could not load forecast file: {e}")
-    return pd.DataFrame(columns=list(FORECAST_COL_MAP.values()))
-
-
-def save_forecast(df):
-    try:
-        df = df.rename(columns=FORECAST_REVERSE_COL_MAP)
-        df.to_csv(FORECAST_PATH, index=False)
-    except Exception:
-        st.info("🔒 Forecast not saved (read-only environment).")
-
-
-def load_deals():
-    try:
-        if os.path.exists(DEALS_PATH):
-            df = pd.read_csv(DEALS_PATH)
-            df["start_date"] = pd.to_datetime(df["start_date"], errors="coerce").dt.date
-            df["end_date"] = pd.to_datetime(df["end_date"], errors="coerce").dt.date
-            df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
-            df = df.rename(columns=DEALS_COL_MAP)
-            return df
-    except Exception as e:
-        st.warning(f"⚠️ Could not load deals file: {e}")
-    return pd.DataFrame(columns=list(DEALS_COL_MAP.values()))
-
-
-def save_deals(df):
-    try:
-        df = df.rename(columns=DEALS_REVERSE_COL_MAP)
-        df.to_csv(DEALS_PATH, index=False)
-    except Exception:
-        st.info("🔒 Deals not saved (read-only environment).")
-
-def right_aligned_help(label: str, content_md: str):
-    """Show a right-aligned 'Help' popover with markdown content."""
-    c1, c2 = st.columns([1, 0.14])
-    with c2:
-        with st.popover(label, use_container_width=True):
-            st.markdown(content_md)
 
 # ========== SECTION 1: Visualization ==========
 
@@ -547,60 +582,61 @@ with st.expander("1. Enter or Upload Daily Forecast"):
 
     forecast_tab, upload_tab = st.tabs(["Manual Entry", "Upload File"])
 
-    # --- Manual Entry Tab ---
-    with forecast_tab:
-        with st.form("forecast_form"):
-            forecast_date = st.date_input("Forecast Date")
-            forecast_consumption = st.number_input("Forecast Consumption (GJ)", min_value=0.0)
-            submit_forecast = st.form_submit_button("Add Forecast")
+# --- Manual Entry Tab ---
+with forecast_tab:
+    with st.form("forecast_form"):
+        forecast_date = st.date_input("Forecast Date")
+        forecast_consumption = st.number_input("Forecast Consumption (GJ)", min_value=0.0)
+        submit_forecast = st.form_submit_button("Add Forecast")
 
-        if submit_forecast:
-            forecast_df = load_forecast()
+    if submit_forecast:
+        forecast_df = get_forecast()  # read from session state
 
-            new_row = pd.DataFrame({
-                "Date": [forecast_date],
-                "Year": [forecast_date.year],
-                "Month": [forecast_date.month],
-                "Day": [forecast_date.day],
-                "Forecast Consumption": [forecast_consumption]
-            })
+        new_row = pd.DataFrame({
+            "Date": [forecast_date],
+            "Year": [forecast_date.year],
+            "Month": [forecast_date.month],
+            "Day": [forecast_date.day],
+            "Forecast Consumption": [forecast_consumption]
+        })
 
-            forecast_df = forecast_df[forecast_df["Date"] != forecast_date]
-            forecast_df = pd.concat([forecast_df, new_row], ignore_index=True)
-            save_forecast(forecast_df)
-            st.success("✅ Forecast added.")
-            st.dataframe(new_row)
+        forecast_df = forecast_df[forecast_df["Date"] != forecast_date]
+        forecast_df = pd.concat([forecast_df, new_row], ignore_index=True)
+        set_forecast(forecast_df)  # <-- updates session + optionally saves
+        st.success("✅ Forecast added.")
+        st.dataframe(new_row)
 
-    # --- Upload Tab ---
-    with upload_tab:
-        uploaded_file = st.file_uploader("Upload Forecast CSV (columns: Date, Forecast Consumption)", type="csv")
+# --- Upload Tab ---
+with upload_tab:
+    uploaded_file = st.file_uploader(
+        "Upload Forecast CSV (columns: Date, Forecast Consumption)", type="csv"
+    )
 
-        if uploaded_file:
-            try:
-                uploaded_df = pd.read_csv(uploaded_file)
+    if uploaded_file:
+        try:
+            uploaded_df = pd.read_csv(uploaded_file)
 
-                if not {"Date", "Forecast Consumption"}.issubset(uploaded_df.columns):
-                    st.error("❌ Uploaded file must contain 'Date' and 'Forecast Consumption' columns.")
-                else:
-                    uploaded_df["Date"] = pd.to_datetime(uploaded_df["Date"], errors="coerce").dt.date
-                    uploaded_df = uploaded_df.dropna(subset=["Date"])
-                    uploaded_df["Year"] = pd.to_datetime(uploaded_df["Date"]).dt.year
-                    uploaded_df["Month"] = pd.to_datetime(uploaded_df["Date"]).dt.month
-                    uploaded_df["Day"] = pd.to_datetime(uploaded_df["Date"]).dt.day
+            if not {"Date", "Forecast Consumption"}.issubset(uploaded_df.columns):
+                st.error("❌ Uploaded file must contain 'Date' and 'Forecast Consumption' columns.")
+            else:
+                uploaded_df["Date"] = pd.to_datetime(uploaded_df["Date"], errors="coerce").dt.date
+                uploaded_df = uploaded_df.dropna(subset=["Date"])
+                uploaded_df["Year"] = pd.to_datetime(uploaded_df["Date"]).dt.year
+                uploaded_df["Month"] = pd.to_datetime(uploaded_df["Date"]).dt.month
+                uploaded_df["Day"] = pd.to_datetime(uploaded_df["Date"]).dt.day
 
-                    existing_df = load_forecast()
-                    merged = pd.concat([existing_df, uploaded_df], ignore_index=True)
-                    merged = merged.drop_duplicates(subset=["Date"], keep="last")
+                existing_df = get_forecast()
+                merged = pd.concat([existing_df, uploaded_df], ignore_index=True)
+                merged = merged.drop_duplicates(subset=["Date"], keep="last")
 
-                    save_forecast(merged)
-                    st.success("✅ Forecast file uploaded and merged.")
-                    st.dataframe(uploaded_df)
+                set_forecast(merged)  # <-- updates session + optionally saves
+                st.success("✅ Forecast file uploaded and merged.")
+                st.dataframe(uploaded_df)
 
-            except Exception as e:
-                st.error(f"❌ Error processing file: {e}")
+        except Exception as e:
+            st.error(f"❌ Error processing file: {e}")
 
 # ========== SECTION 3: View or Export Forecast Data ==========
-
 with st.expander("2. View or Export Forecast Data"):
     # ---- Inline Help ----
     right_aligned_help(
@@ -611,30 +647,40 @@ with st.expander("2. View or Export Forecast Data"):
 
 **Tips**
 - Toggle between **GJ** and **m³** using the unit selector.
-- The table is sorted by `Date`. Use the download button to export exactly what you see.
+- The table is sorted by `Date`. The download button exports exactly what you see.
         """
     )
 
-    forecast_df = load_forecast()
+    # Use in-memory working copy so session edits are reflected immediately
+    forecast_df = get_forecast()
 
     if not forecast_df.empty:
-        forecast_df = forecast_df.copy()
-        forecast_df["Forecast (m³)"] = forecast_df["Forecast Consumption"] * GJ_TO_M3
+        # Make a display copy and add m³
+        df_view = forecast_df.copy()
+        df_view["Forecast (m³)"] = df_view["Forecast Consumption"] * GJ_TO_M3
 
+        # Unit toggle
         display_unit = st.radio("Select Display Unit:", ["GJ", "m³"], horizontal=True)
 
         if display_unit == "GJ":
-            st.dataframe(forecast_df[["Date", "Forecast Consumption"]].sort_values("Date"))
+            df_to_show = df_view[["Date", "Forecast Consumption"]].sort_values("Date")
         else:
-            st.dataframe(forecast_df[["Date", "Forecast (m³)"]].sort_values("Date"))
+            df_to_show = df_view[["Date", "Forecast (m³)"]].sort_values("Date")
 
-        with open(FORECAST_PATH, "rb") as f:
-            st.download_button("📥 Download Forecast CSV", f, file_name="forecast.csv", mime="text/csv")
+        st.dataframe(df_to_show, use_container_width=True)
+
+        # Download exactly what's shown
+        csv_bytes = df_to_show.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "📥 Download This View (CSV)",
+            data=csv_bytes,
+            file_name="forecast_view.csv",
+            mime="text/csv"
+        )
     else:
         st.info("No forecast data available.")
 
 # ========== SECTION 4: Enter Executed Deal ==========
-
 with st.expander("3. Enter Executed Deal"):
     # ---- Inline Help ----
     right_aligned_help(
@@ -656,14 +702,15 @@ with st.expander("3. Enter Executed Deal"):
         """
     )
 
-    deals_df = load_deals()
+    deals_df = get_deals()  # <- from session
 
     with st.form("deal_entry_form"):
         deal_start_date = st.date_input("Start Date")
         deal_end_date = st.date_input("End Date")
         deal_type = st.selectbox("Deal Type", ["Fixed", "Index"])
-        deal_volume = st.number_input("Volume (GJ/day)", min_value=0.0)
-        deal_price = st.number_input("Price ($/GJ)", min_value=0.0)
+        # allow negative (sales/offsets) -> no min_value
+        deal_volume = st.number_input("Volume (GJ/day)", value=0.0)
+        deal_price = st.number_input("Price ($/GJ)", value=0.0)
         deal_supplier = st.selectbox("Supplier", ["Shell", "TD", "Emera", "DirectEnergy", "Other"])
         delivery_point = st.selectbox("Delivery Point", ["DAWN", "Parkway", "AECO", "Other"])
         submit_deal = st.form_submit_button("Add Deal")
@@ -684,36 +731,44 @@ with st.expander("3. Enter Executed Deal"):
                 "End Date": deal_end_date
             })
 
-            deals_df = pd.concat([deals_df, deal_entry], ignore_index=True)
-            save_deals(deals_df)
+            # update in-memory + (optionally) disk
+            new_deals = pd.concat([deals_df, deal_entry], ignore_index=True)
+            set_deals(new_deals)
+
             st.success("✅ Deal added successfully.")
-
-            forecast_df = load_forecast()
-            forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.date
-            deals_df["Date"] = pd.to_datetime(deals_df["Date"]).dt.date
-
-            daily_volumes = deals_df.groupby("Date")["Volume (GJ/day)"].sum().reset_index(name="Total Volume")
-            daily_volumes["Date"] = pd.to_datetime(daily_volumes["Date"]).dt.date
-
-            forecast_check = pd.merge(daily_volumes, forecast_df, how="left", on="Date")
-            forecast_check["Forecast Consumption"] = forecast_check["Forecast Consumption"].fillna(0)
-            forecast_check["Remaining"] = forecast_check["Forecast Consumption"] - forecast_check["Total Volume"]
-
-            over = forecast_check[forecast_check["Remaining"] < 0]
-            missing = forecast_check[forecast_check["Forecast Consumption"] == 0]
-
-            if not over.empty:
-                st.warning(f"⚠️ Total contracted volume exceeds forecast on {len(over)} day(s).")
-                st.dataframe(over[["Date", "Forecast Consumption", "Total Volume", "Remaining"]])
-
-            if not missing.empty:
-                st.info(f"ℹ️ Forecast data missing for {len(missing)} day(s). These are treated as 0 GJ.")
-                st.dataframe(missing[["Date", "Total Volume"]])
-
-            if over.empty and missing.empty:
-                st.success("✅ Deal entry saved with no warnings.")
-
             st.dataframe(deal_entry)
+
+            # --- sanity/coverage checks (using current session data) ---
+            forecast_df = get_forecast()
+            if not forecast_df.empty:
+                forecast_df["Date"] = pd.to_datetime(forecast_df["Date"]).dt.date
+                new_deals["Date"]  = pd.to_datetime(new_deals["Date"]).dt.date
+
+                daily_volumes = (
+                    new_deals.groupby("Date")["Volume (GJ/day)"]
+                    .sum()
+                    .reset_index(name="Total Volume")
+                )
+
+                forecast_check = pd.merge(daily_volumes, forecast_df, how="left", on="Date")
+                forecast_check["Forecast Consumption"] = forecast_check["Forecast Consumption"].fillna(0)
+                forecast_check["Remaining"] = forecast_check["Forecast Consumption"] - forecast_check["Total Volume"]
+
+                over = forecast_check[forecast_check["Remaining"] < 0]
+                missing = forecast_check[forecast_check["Forecast Consumption"] == 0]
+
+                if not over.empty:
+                    st.warning(f"⚠️ Total contracted volume exceeds forecast on {len(over)} day(s).")
+                    st.dataframe(over[["Date", "Forecast Consumption", "Total Volume", "Remaining"]])
+
+                if not missing.empty:
+                    st.info(f"ℹ️ Forecast data missing for {len(missing)} day(s). These are treated as 0 GJ.")
+                    st.dataframe(missing[["Date", "Total Volume"]])
+
+                if over.empty and missing.empty:
+                    st.success("✅ Deal entry saved with no warnings.")
+            else:
+                st.info("ℹ️ No forecast loaded yet; coverage check skipped.")
 
 # ========== SECTION 5: Manage Deals ==========
 with st.expander("4. Manage Deals"):
@@ -733,7 +788,7 @@ with st.expander("4. Manage Deals"):
         """
     )
 
-    deals_df = load_deals()
+    deals_df = get_deals()  # <- from session
 
     if not deals_df.empty:
         # Create a list of unique deal groups
@@ -754,101 +809,121 @@ with st.expander("4. Manage Deals"):
             selected_row = deal_groups[deal_groups["Label"] == selected_label].iloc[0]
             deal_mask = (
                 (deals_df["Start Date"] == selected_row["Start Date"]) &
-                (deals_df["End Date"] == selected_row["End Date"]) &
-                (deals_df["Supplier"] == selected_row["Supplier"])
+                (deals_df["End Date"]   == selected_row["End Date"]) &
+                (deals_df["Supplier"]   == selected_row["Supplier"])
             )
             selected_deals = deals_df[deal_mask]
 
             with st.form("bulk_edit_form"):
                 st.markdown("### Edit Deal")
-                new_volume = st.number_input("Volume (GJ/day)", value=selected_deals["Volume (GJ/day)"].iloc[0])
-                new_price = st.number_input("Price ($/GJ)", value=selected_deals["Price ($/GJ)"].iloc[0])
+                # allow negative updates as well
+                new_volume = st.number_input(
+                    "Volume (GJ/day)",
+                    value=float(selected_deals["Volume (GJ/day)"].iloc[0])
+                )
+                new_price = st.number_input(
+                    "Price ($/GJ)",
+                    value=float(selected_deals["Price ($/GJ)"].iloc[0])
+                )
                 submit_edit = st.form_submit_button("Update Deal")
 
             if submit_edit:
-                deals_df.loc[deal_mask, "Volume (GJ/day)"] = new_volume
-                deals_df.loc[deal_mask, "Price ($/GJ)"] = new_price
-                save_deals(deals_df)
+                updated = deals_df.copy()
+                updated.loc[deal_mask, "Volume (GJ/day)"] = new_volume
+                updated.loc[deal_mask, "Price ($/GJ)"] = new_price
+
+                # update in-memory + (optionally) disk
+                set_deals(updated)
+
                 st.success("✅ Deal updated successfully.")
-                st.dataframe(deals_df[deal_mask])
+                st.dataframe(updated[deal_mask])
     else:
         st.info("No deals found.")
 
 # ========== SECTION 6: Weekly Action Plan ==========
 with st.expander("6. Weekly Action Plan"):
-    # Inline help (right-aligned)
+    # ---- Inline Help (right-aligned) ----
     right_aligned_help(
         "ℹ️ Help",
         """
 **Purpose**
-- Review weekly coverage vs. forecast and get daily **Buy/Sell** guidance.
+- Summarize **Forecast vs Executed** by gas week (Sat–Fri) and suggest daily **Buy/Sell**.
 
-**Gas week**
-- Runs **Saturday → Friday**.
-
-**How to use**
-- Pick the **Week Start** (Saturday).
-- Table shows: Forecast, Total Deals, Action = (Forecast − Deals), and Suggestion.
+**How it works**
+- Pick a **Gas Week Start (Saturday)** to see the 7-day window.
+- Suggestions = Forecast Consumption − Total Deals (Fixed + Index).
+- Positive = **Buy**, Negative = **Sell**, Zero = **Balanced**.
         """
     )
 
-    st.subheader("Weekly Forecast Coverage and Action Plan")
+    # Pull the in-memory working copies so edits in this session are reflected immediately
+    forecast_df = get_forecast()
+    deals_df    = get_deals()
 
-    forecast_df = load_forecast()
-    deals_df = load_deals()
-
-    if not forecast_df.empty:
+    if forecast_df.empty:
+        st.info("Upload or enter forecast data to generate an action plan.")
+    else:
+        # Ensure datetime
         forecast_df["Date"] = pd.to_datetime(forecast_df["Date"])
-        deals_df["Date"] = pd.to_datetime(deals_df["Date"])
+        if not deals_df.empty:
+            deals_df["Date"] = pd.to_datetime(deals_df["Date"])
 
+        # --- Build list of available gas weeks (Saturday starts) ---
+        fc_min = forecast_df["Date"].min().date()
+        fc_max = forecast_df["Date"].max().date()
+
+        # Most-recent Saturday relative to *today*
         today = date.today()
-        days_since_saturday = (today.weekday() + 2) % 7  # Monday=0, Saturday=5
+        days_since_saturday = (today.weekday() + 2) % 7  # Mon=0,... Sat=5
         most_recent_saturday = today - timedelta(days=days_since_saturday)
 
-        all_saturdays = pd.date_range(
-            start=forecast_df["Date"].min(),
-            end=forecast_df["Date"].max(),
-            freq="W-SAT"
-        ).date
+        # Saturdays covered by the forecast range
+        saturdays = pd.date_range(start=fc_min, end=fc_max, freq="W-SAT").date.tolist()
 
-        available_weeks = [d for d in all_saturdays if d >= forecast_df["Date"].min().date()]
-        if most_recent_saturday not in available_weeks:
-            available_weeks.append(most_recent_saturday)
-        available_weeks = sorted(set(available_weeks))
+        # Allow preview of current and next gas week even if not in data yet
+        preview = [most_recent_saturday, most_recent_saturday + timedelta(days=7)]
+        available_weeks = sorted(set(saturdays + [d for d in preview if d >= fc_min]))
 
-        week_start = st.selectbox("Select Gas Week Start (Saturday)", available_weeks, index=available_weeks.index(most_recent_saturday))
-        week_end = week_start + timedelta(days=6)
+        # Fallback if something odd happens
+        default_idx = available_weeks.index(most_recent_saturday) if most_recent_saturday in available_weeks else 0
 
-        st.markdown(f"### Showing Action Plan for **{week_start} to {week_end}**")
+        week_start = st.selectbox("Select Gas Week Start (Saturday)", available_weeks, index=default_idx)
+        week_end   = week_start + timedelta(days=6)
+        st.markdown(f"**Week:** {week_start} → {week_end}")
 
-        forecast_week = forecast_df[
-            (forecast_df["Date"] >= pd.to_datetime(week_start)) &
-            (forecast_df["Date"] <= pd.to_datetime(week_end))
-        ].copy()
+        # --- Filter to week window ---
+        mask_fc = (forecast_df["Date"] >= pd.to_datetime(week_start)) & (forecast_df["Date"] <= pd.to_datetime(week_end))
+        forecast_week = forecast_df.loc[mask_fc, ["Date", "Forecast Consumption"]].copy()
 
-        deals_week = deals_df[
-            (deals_df["Date"] >= pd.to_datetime(week_start)) &
-            (deals_df["Date"] <= pd.to_datetime(week_end))
-        ].copy()
+        if deals_df.empty:
+            deals_week = pd.DataFrame(columns=["Date", "Volume (GJ/day)"])
+        else:
+            mask_dl = (deals_df["Date"] >= pd.to_datetime(week_start)) & (deals_df["Date"] <= pd.to_datetime(week_end))
+            deals_week = deals_df.loc[mask_dl, ["Date", "Volume (GJ/day)"]].copy()
 
-        deals_grouped = deals_week.groupby("Date")["Volume (GJ/day)"].sum().reset_index(name="Total Deals")
-
-        merged = pd.merge(forecast_week, deals_grouped, how="left", on="Date")
-        merged["Total Deals"] = merged["Total Deals"].fillna(0)
-        merged["Action"] = merged["Forecast Consumption"] - merged["Total Deals"]
-        merged["Suggestion"] = merged["Action"].apply(
-            lambda x: f"Buy {x:.1f} GJ" if x > 0 else (f"Sell {abs(x):.1f} GJ" if x < 0 else "Balanced")
+        # Aggregate deals and merge
+        deals_grouped = (
+            deals_week.groupby("Date")["Volume (GJ/day)"].sum().reset_index(name="Total Deals")
+            if not deals_week.empty else
+            pd.DataFrame({"Date": forecast_week["Date"].unique(), "Total Deals": 0})
         )
 
-        st.dataframe(merged[["Date", "Forecast Consumption", "Total Deals", "Action", "Suggestion"]])
-    else:
-        st.info("Upload forecast data first to generate an action plan.")
+        merged = pd.merge(forecast_week, deals_grouped, how="left", on="Date").fillna({"Total Deals": 0})
+        merged["Action"] = merged["Forecast Consumption"] - merged["Total Deals"]
+        merged["Suggestion"] = merged["Action"].apply(
+            lambda x: f"Buy {x:,.1f} GJ" if x > 0 else (f"Sell {abs(x):,.1f} GJ" if x < 0 else "Balanced")
+        )
 
-# Footer
-st.markdown(
-    f"<hr><p style='text-align:center; color:gray; font-size:12px;'>"
-    f"Created by Connor Thornhill | <a href='{github_url}' target='_blank'>GitHub</a>"
-    "</p>",
-    unsafe_allow_html=True
-)
+        # Nice little weekly summary up top
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Weekly Forecast", f"{merged['Forecast Consumption'].sum():,.0f} GJ")
+        c2.metric("Weekly Executed", f"{merged['Total Deals'].sum():,.0f} GJ")
+        delta = merged["Total Deals"].sum() - merged["Forecast Consumption"].sum()
+        c3.metric("Net Position", f"{delta:,.0f} GJ", help="Executed − Forecast over the selected week")
+
+        # Display table
+        st.dataframe(
+            merged.sort_values("Date")[["Date", "Forecast Consumption", "Total Deals", "Action", "Suggestion"]],
+            use_container_width=True
+        )
 # ========== END OF APP ==========
