@@ -397,30 +397,26 @@ title_col, help_col = st.columns([1, 0.08])
 with title_col:
     st.markdown("## Forecast vs. Executed Deals")
 with help_col:
-    # Small inline tip for this section
     try:
-        # Streamlit >= 1.33 has st.popover
         with st.popover("ℹ️", use_container_width=True):
             st.markdown("""
 **What you’re seeing**
-- **Bars**: daily executed volume (**Fixed + Index**, stacked)
-- **Line**: daily **Forecasted Consumption**
-- Soft halo color hints **Long / Short / Balanced** per day
+- **Bars** = daily executed volume (**Fixed + Index**, stacked)
+- **Line** = daily **Forecasted Consumption**
+- Soft halo shows **Long / Short / Balanced** per day
 
 **How to use**
-- Pick a **date range** to focus the analysis (defaults to the current gas week).
-- Tiles show period totals and % difference.
+- Pick a **date range** (defaults to the gas week we seed).
+- Tiles show totals and % difference for the selected window.
 """)
     except Exception:
-        # Fallback if popover isn't available
         with st.expander("ℹ️ About this chart", expanded=False):
             st.markdown("""
 **Bars**: Fixed + Index (stacked) • **Line**: Forecast  
-Soft halos: Long / Short / Balanced by day  
 Use the date range to focus the view; tiles sum the selected period.
 """)
 
-# ---- Load data ----
+# ---- Load data from session ----
 fc = get_forecast()
 dl = get_deals()
 
@@ -433,7 +429,7 @@ else:
     if not dl.empty:
         dl["Date"] = pd.to_datetime(dl["Date"]).dt.date
 
-    # ---- Default date window: Aug 2 → Aug 8 (7 days) ----
+    # ---- Bounds from data + seeded default week (Aug 2–Aug 8, 2025) ----
     seeded_start = date(2025, 8, 2)
     seeded_end   = seeded_start + timedelta(days=6)
 
@@ -457,10 +453,10 @@ else:
         min_value=start_bound,
         max_value=end_bound,
         format="YYYY/MM/DD",
-        key="viz_range",
+        key="viz_range",  # <--- important
     )
     start_date, end_date = st.session_state["viz_range"]
-    
+
     # ---- Build daily pivot for deals and align with forecast ----
     if not dl.empty:
         pivot = dl.pivot_table(
@@ -471,7 +467,6 @@ else:
         ).fillna(0).sort_index()
         pivot["Total"] = pivot.sum(axis=1)
     else:
-        # No deals yet; still show forecast line
         pivot = pd.DataFrame(index=fc.index.copy())
         pivot["Fixed"] = 0
         pivot["Index"] = 0
@@ -481,7 +476,7 @@ else:
     fc_aligned = fc.reindex(combined_index).fillna(0)
     pv = pivot.reindex(combined_index).fillna(0)
 
-    pv["Forecast"] = fc_aligned["Forecast Consumption"]
+    pv["Forecast"]   = fc_aligned["Forecast Consumption"]
     pv["Long/Short"] = pv["Total"] - pv["Forecast"]
 
     # Filter to selected window
@@ -498,17 +493,15 @@ else:
     col_b.metric("Total Executed", f"{total_executed:,.0f} GJ")
     col_c.metric("% Difference", f"{pct_diff:,.1f}%")
 
-    # ---- Dark mode palette ----
-    COLOR_FIXED   = "#3B82F6"   # blue-500 (muted)
-    COLOR_INDEX   = "#F97316"   # orange-400 (muted)
-    COLOR_LINE    = "#FFFFFF"   # forecast line
-    COLOR_GRID    = "rgba(255,255,255,0.08)"
-    COLOR_BG      = "rgba(0,0,0,0)"
-
-    # Status glow colors (softer)
-    GLOW_LONG     = "rgba(77,182,172,0.18)"   # soft teal
-    GLOW_SHORT    = "rgba(229,115,115,0.20)"  # soft coral
-    GLOW_BAL      = "rgba(144,164,174,0.15)"  # blue-grey
+    # ---- Colors ----
+    COLOR_FIXED = "#3B82F6"
+    COLOR_INDEX = "#F97316"
+    COLOR_LINE  = "#FFFFFF"
+    COLOR_GRID  = "rgba(255,255,255,0.08)"
+    COLOR_BG    = "rgba(0,0,0,0)"
+    GLOW_LONG   = "rgba(77,182,172,0.18)"
+    GLOW_SHORT  = "rgba(229,115,115,0.20)"
+    GLOW_BAL    = "rgba(144,164,174,0.15)"
 
     # ---- Precompute arrays ----
     idx_dates     = pv.index
@@ -521,13 +514,11 @@ else:
         if v >  1e-2: return "Long"
         return "Balanced"
 
-    status = pv["Long/Short"].apply(status_label).tolist()
+    status     = pv["Long/Short"].apply(status_label).tolist()
     customdata = np.stack([status, forecast_vals, fixed_vals, index_vals], axis=-1)
 
     # ---- Plotly figure ----
     fig = go.Figure()
-
-    # Bars (stacked): add a subtle border to increase separation on dark bg
     fig.add_trace(go.Bar(
         name="Fixed", x=idx_dates, y=fixed_vals,
         marker=dict(color=COLOR_FIXED, line=dict(width=0.5, color="rgba(255,255,255,0.2)"))
@@ -537,7 +528,6 @@ else:
         marker=dict(color=COLOR_INDEX, line=dict(width=0.5, color="rgba(255,255,255,0.2)"))
     ))
 
-    # Soft “glow” markers behind the forecast line to hint long/short/balanced
     for d, y, s in zip(idx_dates, forecast_vals, status):
         glow = GLOW_LONG if s == "Long" else GLOW_SHORT if s == "Short" else GLOW_BAL
         fig.add_trace(go.Scatter(
@@ -546,7 +536,6 @@ else:
             hoverinfo="skip", showlegend=False
         ))
 
-    # Forecast line
     fig.add_trace(go.Scatter(
         name="Forecasted Consumption",
         x=idx_dates, y=forecast_vals,
@@ -564,14 +553,14 @@ else:
         )
     ))
 
-    # Layout: dark-mode friendly grid, spacing, legend
     fig.update_layout(
         barmode="stack",
         xaxis_title="Date",
         yaxis_title="GJ",
         plot_bgcolor=COLOR_BG,
         paper_bgcolor=COLOR_BG,
-        legend=dict(bgcolor="rgba(0,0,0,0)", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(bgcolor="rgba(0,0,0,0)", orientation="h",
+                    yanchor="bottom", y=1.02, xanchor="right", x=1),
         margin=dict(l=10, r=10, t=10, b=30),
     )
     fig.update_xaxes(showgrid=True, gridcolor=COLOR_GRID, zeroline=False)
