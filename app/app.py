@@ -437,51 +437,66 @@ dl = get_deals()
 if fc.empty:
     st.info("No forecast data yet.")
 else:
+    # Prep frames
     fc["Date"] = pd.to_datetime(fc["Date"]).dt.date
     fc = fc.set_index("Date").sort_index()
-
     if not dl.empty:
         dl["Date"] = pd.to_datetime(dl["Date"]).dt.date
 
-    # ---- Bounds from data + seeded default week (Aug 2–Aug 8, 2025) ----
+    # ---- Seed + guard the visualization range ----
     seeded_start = date(2025, 8, 2)
     seeded_end   = seeded_start + timedelta(days=6)
+
+    # Bounds must cover both the data span and the seeded week
     min_date = fc.index.min()
     max_date = fc.index.max()
-
-    # The picker bounds must at least cover both the data span and the seeded week
     start_bound = min(min_date, seeded_start)
     end_bound   = max(max_date, seeded_end)
 
-    # Initialize viz_range if missing
+    # Ensure viz_range exists as a (start, end) tuple
     if "viz_range" not in st.session_state:
         st.session_state["viz_range"] = (seeded_start, seeded_end)
 
-    # If someone queued a change, apply it BEFORE the widget renders
-    if "__pending_viz_range" in st.session_state:
-        pend_s, pend_e = st.session_state.pop("__pending_viz_range")
-        # Clamp to bounds
+    # If a pending range was queued by include_dates_and_rerun(), consume it now
+    _pending = st.session_state.pop("__pending_viz_range", None)
+    if _pending and isinstance(_pending, (list, tuple)) and len(_pending) == 2:
+        pend_s, pend_e = _pending
         pend_s = max(start_bound, min(pend_s, end_bound))
-        pend_e = max(pend_s, min(pend_e, end_bound))
+        pend_e = max(pend_s,     min(pend_e, end_bound))
         st.session_state["viz_range"] = (pend_s, pend_e)
 
-    # Also clamp whatever is currently in viz_range
+    # Clamp whatever is currently stored
     cur_s, cur_e = st.session_state["viz_range"]
     cur_s = max(start_bound, min(cur_s, end_bound))
-    cur_e = max(cur_s, min(cur_e, end_bound))
+    cur_e = max(cur_s,     min(cur_e, end_bound))
     st.session_state["viz_range"] = (cur_s, cur_e)
 
-    # Now render the date picker bound to the session key
-    st.date_input(
+    # ---- Date picker with safe callback ----
+    def _on_date_change():
+        val = st.session_state.get("date_filter")
+        # During picking Streamlit may give a single date—ignore until 2 are present
+        if isinstance(val, (list, tuple)) and len(val) == 2 and all(val):
+            st.session_state["viz_range"] = (val[0], val[1])
+            # clear stale pending state
+            st.session_state.pop("__pending_viz_range", None)
+            st.rerun()
+
+    # Render the picker bound to a separate key, prefilled with viz_range
+    start_date, end_date = st.date_input(
         "Select Date Range",
         value=st.session_state["viz_range"],
         min_value=start_bound,
         max_value=end_bound,
         format="YYYY/MM/DD",
-        key="viz_range",
+        key="date_filter",
+        on_change=_on_date_change,
     )
 
-    start_date, end_date = st.session_state["viz_range"]
+    # If callback didn’t fire (e.g., both already set), mirror to locals
+    if isinstance(start_date, date) and isinstance(end_date, date):
+        cur_s, cur_e = start_date, end_date
+    else:
+        cur_s, cur_e = st.session_state["viz_range"]
 
     # ---- Build daily pivot for deals and align with forecast ----
     if not dl.empty:
@@ -501,13 +516,11 @@ else:
     combined_index = fc.index.union(pivot.index)
     fc_aligned = fc.reindex(combined_index).fillna(0)
     pv = pivot.reindex(combined_index).fillna(0)
-
     pv["Forecast"]   = fc_aligned["Forecast Consumption"]
     pv["Long/Short"] = pv["Total"] - pv["Forecast"]
 
-    # Filter to selected window
-    mask = (pv.index >= start_date) & (pv.index <= end_date)
-    pv = pv.loc[mask]
+    # Filter to current window
+    pv = pv.loc[(pv.index >= cur_s) & (pv.index <= cur_e)]
 
     # ---- Summary metrics ----
     total_forecast = float(pv["Forecast"].sum())
@@ -781,6 +794,8 @@ with st.expander("3. Enter Executed Deal"):
             st.success("✅ Deal added successfully.")
             st.dataframe(deal_entry)
 
+            include_dates_and_rerun(deal_start_date, deal_end_date)
+
             # --- sanity/coverage checks (using current session data) ---
             forecast_df = get_forecast()
             if not forecast_df.empty:
@@ -858,30 +873,33 @@ with st.expander("4. Manage Deals"):
             )
             selected_deals = deals_df[deal_mask]
 
-            with st.form("bulk_edit_form"):
-                st.markdown("### Edit Deal")
-                # allow negative updates as well
-                new_volume = st.number_input(
-                    "Volume (GJ/day)",
-                    value=float(selected_deals["Volume (GJ/day)"].iloc[0])
-                )
-                new_price = st.number_input(
-                    "Price ($/GJ)",
-                    value=float(selected_deals["Price ($/GJ)"].iloc[0])
-                )
-                submit_edit = st.form_submit_button("Update Deal")
+            col1, col2, col3 = st.columns([1,1,1])
+            with col1:
+                with st.form("bulk_edit_form"):
+                    st.markdown("### Edit Deal")
+                    new_volume = st.number_input("Volume (GJ/day)", value=float(selected_deals["Volume (GJ/day)"].iloc[0]))
+                    new_price  = st.number_input("Price ($/GJ)", value=float(selected_deals["Price ($/GJ)"].iloc[0]))
+                    submit_edit = st.form_submit_button("Update Deal")
 
-            if submit_edit:
-                updated = deals_df.copy()
-                updated.loc[deal_mask, "Volume (GJ/day)"] = new_volume
-                updated.loc[deal_mask, "Price ($/GJ)"] = new_price
+                if submit_edit:
+                    deals_df.loc[deal_mask, "Volume (GJ/day)"] = new_volume
+                    deals_df.loc[deal_mask, "Price ($/GJ)"]    = new_price
 
-                # update in-memory + (optionally) disk
-                set_deals(updated)
+                    set_deals(deals_df)  # <-- IMPORTANT
+                    st.success("✅ Deal updated successfully.")
+                    st.dataframe(deals_df[deal_mask])
 
-                st.success("✅ Deal updated successfully.")
-                st.dataframe(updated[deal_mask])
-                st.rerun()
+                    # focus the chart on the edited deal's range
+                    include_dates_and_rerun(selected_row["Start Date"], selected_row["End Date"])  # <-- refresh + jump
+
+            with col2:
+                # Optional: Delete this deal group
+                if st.button("🗑️ Delete Deal"):
+                    deals_df = deals_df[~deal_mask].reset_index(drop=True)
+                    set_deals(deals_df)  # <-- IMPORTANT
+                    st.success("✅ Deal deleted.")
+
+                    include_dates_and_rerun(selected_row["Start Date"], selected_row["End Date"])  # <-- refresh + jump
     else:
         st.info("No deals found.")
 
@@ -972,3 +990,21 @@ with st.expander("6. Weekly Action Plan"):
             use_container_width=True
         )
 # ========== END OF APP ==========
+
+st.markdown(
+    """
+    <style>
+    .footer {
+        font-size: 0.85rem;
+        text-align: center;
+        color: rgba(255,255,255,0.6); /* light grey for dark mode */
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+    </style>
+    <div class="footer">
+        Built by <b>Connor Thornhill</b>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
