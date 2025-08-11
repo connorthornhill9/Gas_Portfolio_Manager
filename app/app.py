@@ -98,9 +98,23 @@ def _set_viz_range(new_start, new_end):
         e = new_end
     st.session_state["viz_range"] = (s, e)
 
-def include_dates_and_rerun(new_start, new_end):
-    """Expand the visible window to include the new dates and rerun the app."""
-    _set_viz_range(new_start, new_end)
+
+def include_dates_and_rerun(forecast_date: date, deal_date: date | None = None):
+    """
+    Expand the visualization range to include the given dates.
+    Stores the target range in a pending key, then reruns.
+    """
+    # Start from whatever the chart is showing, or the seeded week
+    current_start, current_end = st.session_state.get(
+        "viz_range", (date(2025, 8, 2), date(2025, 8, 8))
+    )
+    candidates = [current_start, current_end, forecast_date]
+    if deal_date is not None:
+        candidates.append(deal_date)
+    new_start = min(candidates)
+    new_end   = max(candidates)
+    # Hand off the new value for Section 1 to consume before rendering the widget
+    st.session_state["__pending_viz_range"] = (new_start, new_end)
     st.rerun()
 
 # ========== Constants ==========
@@ -432,7 +446,6 @@ else:
     # ---- Bounds from data + seeded default week (Aug 2–Aug 8, 2025) ----
     seeded_start = date(2025, 8, 2)
     seeded_end   = seeded_start + timedelta(days=6)
-
     min_date = fc.index.min()
     max_date = fc.index.max()
 
@@ -440,21 +453,34 @@ else:
     start_bound = min(min_date, seeded_start)
     end_bound   = max(max_date, seeded_end)
 
-    # Initialize or clamp the stored range
-    start0, end0 = st.session_state.get("viz_range", (seeded_start, seeded_end))
-    start0 = max(start_bound, min(start0, end_bound))
-    end0   = max(start0, min(end0, end_bound))  # ensure start0 <= end0 and within bounds
-    st.session_state["viz_range"] = (start0, end0)
+    # Initialize viz_range if missing
+    if "viz_range" not in st.session_state:
+        st.session_state["viz_range"] = (seeded_start, seeded_end)
 
-    # Date picker is bound to session state; helpers can update this and call st.rerun()
+    # If someone queued a change, apply it BEFORE the widget renders
+    if "__pending_viz_range" in st.session_state:
+        pend_s, pend_e = st.session_state.pop("__pending_viz_range")
+        # Clamp to bounds
+        pend_s = max(start_bound, min(pend_s, end_bound))
+        pend_e = max(pend_s, min(pend_e, end_bound))
+        st.session_state["viz_range"] = (pend_s, pend_e)
+
+    # Also clamp whatever is currently in viz_range
+    cur_s, cur_e = st.session_state["viz_range"]
+    cur_s = max(start_bound, min(cur_s, end_bound))
+    cur_e = max(cur_s, min(cur_e, end_bound))
+    st.session_state["viz_range"] = (cur_s, cur_e)
+
+    # Now render the date picker bound to the session key
     st.date_input(
         "Select Date Range",
         value=st.session_state["viz_range"],
         min_value=start_bound,
         max_value=end_bound,
         format="YYYY/MM/DD",
-        key="viz_range",  # <--- important
+        key="viz_range",
     )
+
     start_date, end_date = st.session_state["viz_range"]
 
     # ---- Build daily pivot for deals and align with forecast ----
