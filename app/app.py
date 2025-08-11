@@ -89,6 +89,20 @@ def right_aligned_help(label: str, content_md: str):
             with st.expander(label, expanded=False):
                 st.markdown(content_md)
 
+def _set_viz_range(new_start, new_end):
+    """Ensure the chart's date picker (key='viz_range') includes [new_start, new_end]."""
+    s, e = st.session_state.get("viz_range", (new_start, new_end))
+    if new_start < s:
+        s = new_start
+    if new_end > e:
+        e = new_end
+    st.session_state["viz_range"] = (s, e)
+
+def include_dates_and_rerun(new_start, new_end):
+    """Expand the visible window to include the new dates and rerun the app."""
+    _set_viz_range(new_start, new_end)
+    st.rerun()
+
 # ========== Constants ==========
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -420,23 +434,33 @@ else:
         dl["Date"] = pd.to_datetime(dl["Date"]).dt.date
 
     # ---- Default date window: Aug 2 → Aug 8 (7 days) ----
-    default_start = date(2025, 8, 2)
-    default_end   = default_start + timedelta(days=6)
+    seeded_start = date(2025, 8, 2)
+    seeded_end   = seeded_start + timedelta(days=6)
 
-    # Constrain the picker to available forecast range, but default to the requested week
-    min_date = fc.index.min() if not fc.empty else default_start
-    max_date = fc.index.max() if not fc.empty else default_end
-    start_bound = min(min_date, default_start)
-    end_bound = max(max_date, default_end)
+    min_date = fc.index.min()
+    max_date = fc.index.max()
 
-    start_date, end_date = st.date_input(
+    # The picker bounds must at least cover both the data span and the seeded week
+    start_bound = min(min_date, seeded_start)
+    end_bound   = max(max_date, seeded_end)
+
+    # Initialize or clamp the stored range
+    start0, end0 = st.session_state.get("viz_range", (seeded_start, seeded_end))
+    start0 = max(start_bound, min(start0, end_bound))
+    end0   = max(start0, min(end0, end_bound))  # ensure start0 <= end0 and within bounds
+    st.session_state["viz_range"] = (start0, end0)
+
+    # Date picker is bound to session state; helpers can update this and call st.rerun()
+    st.date_input(
         "Select Date Range",
-        value=(default_start, default_end),
+        value=st.session_state["viz_range"],
         min_value=start_bound,
         max_value=end_bound,
-        format="YYYY/MM/DD"
+        format="YYYY/MM/DD",
+        key="viz_range",
     )
-
+    start_date, end_date = st.session_state["viz_range"]
+    
     # ---- Build daily pivot for deals and align with forecast ----
     if not dl.empty:
         pivot = dl.pivot_table(
@@ -606,6 +630,7 @@ with st.expander("1. Enter or Upload Daily Forecast"):
             set_forecast(forecast_df)  # updates session (+ saves locally if ALLOW_WRITE=1)
             st.success("✅ Forecast added.")
             st.dataframe(new_row)
+            include_dates_and_rerun(forecast_date, forecast_date)
             # st.rerun()  # optional: uncomment if you want an immediate refresh
 
     # --- Upload Tab ---
@@ -634,6 +659,7 @@ with st.expander("1. Enter or Upload Daily Forecast"):
                     set_forecast(merged)  # updates session (+ saves locally if ALLOW_WRITE=1)
                     st.success("✅ Forecast file uploaded and merged.")
                     st.dataframe(uploaded_df)
+                    include_dates_and_rerun(uploaded_df["Date"].min(), uploaded_df["Date"].max())
                     # st.rerun()  # optional
             except Exception as e:
                 st.error(f"❌ Error processing file: {e}")
@@ -766,6 +792,7 @@ with st.expander("3. Enter Executed Deal"):
                 if not missing.empty:
                     st.info(f"ℹ️ Forecast data missing for {len(missing)} day(s). These are treated as 0 GJ.")
                     st.dataframe(missing[["Date", "Total Volume"]])
+                    include_dates_and_rerun(deal_start_date, deal_end_date)
 
                 if over.empty and missing.empty:
                     st.success("✅ Deal entry saved with no warnings.")
@@ -839,6 +866,7 @@ with st.expander("4. Manage Deals"):
 
                 st.success("✅ Deal updated successfully.")
                 st.dataframe(updated[deal_mask])
+                st.rerun()
     else:
         st.info("No deals found.")
 
